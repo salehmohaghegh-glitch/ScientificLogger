@@ -13,6 +13,10 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.ShowChart
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -23,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import com.saleh.scientificlogger.ui.theme.ScientificLoggerAppTheme
 
 class MainActivity : ComponentActivity() {
@@ -35,16 +40,29 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             ScientificLoggerAppTheme {
-                MainScreen(viewModel)
+                AppNavigation()
             }
         }
     }
 }
 
 @SuppressLint("InlinedApi")
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(viewModel: MainViewModel) {
+fun MainScreen(viewModel: MainViewModel, navController: NavController) {
     val state by viewModel.uiState
+    val chartToShow by viewModel.chartToShow
+
+    chartToShow?.let {
+        val title = when (it) {
+            SensorType.ACCELEROMETER -> "Accelerometer"
+            SensorType.GYROSCOPE -> "Gyroscope"
+            else -> ""
+        }
+        ChartDialog(title = title, chartModelProducer = viewModel.chartModelProducer) {
+            viewModel.hideChart()
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -66,15 +84,24 @@ fun MainScreen(viewModel: MainViewModel) {
     }
 
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = Color(0xFFF0F2F5)
+        topBar = {
+            TopAppBar(
+                title = { Text("Scientific Data Logger") },
+                actions = {
+                    IconButton(onClick = { navController.navigate(Screen.Help.route) }) {
+                        Icon(Icons.Default.Info, contentDescription = "Help")
+                    }
+                    IconButton(onClick = { navController.navigate(Screen.Settings.route) }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                    }
+                }
+            )
+        }
     ) { padding ->
         Column(
             modifier = Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Scientific Data Logger", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E88E5))
-            Spacer(modifier = Modifier.height(16.dp))
 
             Button(
                 onClick = { viewModel.onToggleRecordingClick() },
@@ -113,6 +140,7 @@ fun MainScreen(viewModel: MainViewModel) {
 
             if (state.isNavigating || state.isCalibrating) {
                 SensorCard("INS Navigation (Kalman Filter)",
+                    onChartClick = null,
                     "Status: ${if (state.isCalibrating) "Calibrating" else "Navigating"}",
                     "X: %.2f m".format(state.navX), "Y: %.2f m".format(state.navY), "Z: %.2f m".format(state.navZ),
                     "Vx: %.2f m/s".format(state.navVelX), "Vy: %.2f m/s".format(state.navVelY), "Vz: %.2f m/s".format(state.navVelZ),
@@ -120,24 +148,35 @@ fun MainScreen(viewModel: MainViewModel) {
                 )
             }
 
-            SensorCard("Accelerometer (m/s²)", "X: %.2f".format(state.accX), "Y: %.2f".format(state.accY), "Z: %.2f".format(state.accZ), "Total: %.2f".format(state.accTotal))
-            SensorCard("Gyroscope (rad/s)", "X: %.2f".format(state.gyroX), "Y: %.2f".format(state.gyroY), "Z: %.2f".format(state.gyroZ))
-            SensorCard("Magnetometer (µT)", "X: %.2f".format(state.magX), "Y: %.2f".format(state.magY), "Z: %.2f".format(state.magZ))
-            SensorCard("Orientation (Fused)", "Az: %.1f°".format(state.azimuth), "Pi: %.1f°".format(state.pitch), "Ro: %.1f°".format(state.roll))
-            SensorCard("GPS (Native)", "Lat: %.5f".format(state.lat), "Lon: %.5f".format(state.lon), "Alt: %.1f m".format(state.alt), "Speed: %.1f m/s".format(state.speed))
+            SensorCard("Accelerometer (m/s²)", onChartClick = { viewModel.showChart(SensorType.ACCELEROMETER) }, "X: %.2f".format(state.accX), "Y: %.2f".format(state.accY), "Z: %.2f".format(state.accZ), "Total: %.2f".format(state.accTotal))
+            SensorCard("Gyroscope (rad/s)", onChartClick = { viewModel.showChart(SensorType.GYROSCOPE) }, "X: %.2f".format(state.gyroX), "Y: %.2f".format(state.gyroY), "Z: %.2f".format(state.gyroZ))
+            SensorCard("Magnetometer (µT)", onChartClick = null, "X: %.2f".format(state.magX), "Y: %.2f".format(state.magY), "Z: %.2f".format(state.magZ))
+            SensorCard("Orientation (Fused)", onChartClick = null, "Az: %.1f°".format(state.azimuth), "Pi: %.1f°".format(state.pitch), "Ro: %.1f°".format(state.roll))
+            SensorCard("GPS Data", onChartClick = null,
+                "Lat: %.5f".format(state.lat), "Lon: %.5f".format(state.lon), "Alt: %.1f m".format(state.alt),
+                "Speed: %.1f m/s".format(state.speed), "Course: %.1f°".format(state.gpsCourse),
+                "GPS X: %.2f m".format(state.gpsX), "GPS Y: %.2f m".format(state.gpsY), "GPS Z: %.2f m".format(state.gpsZ)
+            )
         }
     }
 }
 
 @Composable
-fun SensorCard(title: String, vararg values: String) {
+fun SensorCard(title: String, onChartClick: (() -> Unit)?, vararg values: String) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(title, fontWeight = FontWeight.Bold, color = Color.DarkGray)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(title, fontWeight = FontWeight.Bold, color = Color.DarkGray)
+                onChartClick?.let {
+                    IconButton(onClick = it) {
+                        Icon(Icons.Outlined.ShowChart, contentDescription = "Show chart")
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(4.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 val half = (values.size + 1) / 2

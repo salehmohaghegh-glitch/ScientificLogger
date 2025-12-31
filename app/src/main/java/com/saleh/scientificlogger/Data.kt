@@ -12,6 +12,8 @@ data class SensorRecord(
     val navX: Float, val navY: Float, val navZ: Float,
     val navVelX: Float, val navVelY: Float, val navVelZ: Float,
     val navAzimuth: Float, val navPitch: Float, val navRoll: Float,
+    val gpsX: Float, val gpsY: Float, val gpsZ: Float,
+    val gpsCourse: Float, val gpsPitch: Float,
     val gpsNavDiff: Float
 )
 
@@ -27,6 +29,8 @@ data class UiDashboardState(
     val navX: Float = 0f, val navY: Float = 0f, val navZ: Float = 0f,
     val navVelX: Float = 0f, val navVelY: Float = 0f, val navVelZ: Float = 0f,
     val navAzimuth: Float = 0f, val navPitch: Float = 0f, val navRoll: Float = 0f,
+    val gpsX: Float = 0f, val gpsY: Float = 0f, val gpsZ: Float = 0f,
+    val gpsCourse: Float = 0f, val gpsPitch: Float = 0f,
     val gpsDiff: Float = 0f,
     val isNavigating: Boolean = false,
     val isCalibrating: Boolean = false
